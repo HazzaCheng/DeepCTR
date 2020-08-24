@@ -43,12 +43,14 @@ class Hash(tf.keras.layers.Layer):
         if x.dtype != tf.string:
             x = tf.as_string(x, )
         try:
+            # 启用 mask_zero 的话，buckets 数量要减一，要留一个 bucket 给 0
             hash_x = tf.string_to_hash_bucket_fast(x, self.num_buckets if not self.mask_zero else self.num_buckets - 1,
                                                     name=None)  # weak hash
         except:
             hash_x = tf.strings.to_hash_bucket_fast(x, self.num_buckets if not self.mask_zero else self.num_buckets - 1,
                                                name=None)  # weak hash
         if self.mask_zero:
+            # 如果启用 mask_zero 的话，非零值加一
             mask_1 = tf.cast(tf.not_equal(x, "0"), 'int64')
             mask_2 = tf.cast(tf.not_equal(x, "0.0"), 'int64')
             mask = mask_1 * mask_2
@@ -101,13 +103,16 @@ class Linear(tf.keras.layers.Layer):
 
     def call(self, inputs, **kwargs):
         if self.mode == 0:
+            # 只有 sparse feature 的情况
             sparse_input = inputs
             linear_logit = reduce_sum(sparse_input, axis=-1, keep_dims=True)
         elif self.mode == 1:
+            # 只有 dense feature 的情况
             dense_input = inputs
             fc = tf.tensordot(dense_input, self.kernel, axes=(-1, 0))
             linear_logit = fc
         else:
+            # sparse feature 和 dense feature 都有的情况
             sparse_input, dense_input = inputs
             fc = tf.tensordot(dense_input, self.kernel, axes=(-1, 0))
             linear_logit = reduce_sum(sparse_input, axis=-1, keep_dims=False) + fc

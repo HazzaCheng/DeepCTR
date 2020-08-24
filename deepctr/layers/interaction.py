@@ -430,7 +430,7 @@ class FM(Layer):
                 % (K.ndim(inputs)))
 
         concated_embeds_value = inputs
-
+        # 把Embedding后的向量加起来，然后平方然后减去每一个向量的平方(内积)，再除以2
         square_of_sum = tf.square(reduce_sum(
             concated_embeds_value, axis=1, keep_dims=True))
         sum_of_square = reduce_sum(

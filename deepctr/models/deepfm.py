@@ -38,27 +38,31 @@ def DeepFM(linear_feature_columns, dnn_feature_columns, fm_group=[DEFAULT_GROUP_
     :return: A Keras model instance.
     """
 
+    # 将每个特征构造成 keras 里的 Input
     features = build_input_features(
         linear_feature_columns + dnn_feature_columns)
 
     inputs_list = list(features.values())
 
+    # 得到 fm 里 linear 部分，线性部分我们虽然也使用了Embedding来替代 <w, x>，
+    # 但是这个Embedding并不是真正意义的Embedding，只是为了复用代码避免再次one-hot自己展开而已，所有不能共享。
     linear_logit = get_linear_logit(features, linear_feature_columns, seed=seed, prefix='linear',
                                     l2_reg=l2_reg_linear)
 
     group_embedding_dict, dense_value_list = input_from_feature_columns(features, dnn_feature_columns, l2_reg_embedding,
-                                                                        seed, support_group=True)
-
+                                                                       seed, support_group=True)
+    # 得到 fm 部分
     fm_logit = add_func([FM()(concat_func(v, axis=1))
                          for k, v in group_embedding_dict.items() if k in fm_group])
 
+    # 得到 dnn 部分，fm 的输入和 dnn 的输入是同一个 group_embedding_dict
     dnn_input = combined_dnn_input(list(chain.from_iterable(
         group_embedding_dict.values())), dense_value_list)
     dnn_output = DNN(dnn_hidden_units, dnn_activation, l2_reg_dnn, dnn_dropout,
                      dnn_use_bn, seed)(dnn_input)
     dnn_logit = tf.keras.layers.Dense(
         1, use_bias=False, activation=None)(dnn_output)
-
+    # linear_logit、fm_logit 和 dnn_logit 加起来输入最后的 sigmoid 函数，然后用输入和输出构建 Keras 的 Model
     final_logit = add_func([linear_logit, fm_logit, dnn_logit])
 
     output = PredictionLayer(task)(final_logit)

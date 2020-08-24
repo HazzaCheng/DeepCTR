@@ -111,6 +111,13 @@ def get_feature_names(feature_columns):
 
 
 def build_input_features(feature_columns, prefix=''):
+    """
+    返回值是一个OrderedDict，key是feature的名字比如”C1”，value是Keras的Input。
+    对于Category的feature，Input的shape是1，对于Dense的feature，Input是其维度，这里都是1，这些都是Keras模型的输入。
+    因此对于criteo.sample，输入是39个field。
+    这和我们平时些Keras可能有一些不同，平时我通常把输入的所有field都拼接成一个大的向量。
+    但是这里实现的是一个通用的CTR框架，它需要灵活的处理所有的数据集而不只是criteo，因此它把每一个field都作为一个单独的输入。
+    """
     input_features = OrderedDict()
     for fc in feature_columns:
         if isinstance(fc, SparseFeat):
@@ -136,7 +143,13 @@ def build_input_features(feature_columns, prefix=''):
 
 def get_linear_logit(features, feature_columns, units=1, use_bias=False, seed=1024, prefix='linear',
                      l2_reg=0):
+    """
+    这个函数的作用其实就是线性部分，也就是 <W, x>。
+    这本来很简单，但是我们需要把输入的C1-C26用one-hot进行编码，然后拼接起来，再把I1-I13也拼接起来，长度为vocab_1+…+vocab_26+13的输入向量，然后再乘以W。
+    不过这里使用了Embedding实现了类似的效果，用Embedding Matrix实现了同样的效果，
+    """
     linear_feature_columns = copy(feature_columns)
+    # 将 embedding_dim 设置为 1
     for i in range(len(linear_feature_columns)):
         if isinstance(linear_feature_columns[i], SparseFeat):
             linear_feature_columns[i] = linear_feature_columns[i]._replace(embedding_dim=1)
@@ -144,13 +157,13 @@ def get_linear_logit(features, feature_columns, units=1, use_bias=False, seed=10
             linear_feature_columns[i] = linear_feature_columns[i]._replace(
                 sparsefeat=linear_feature_columns[i].sparsefeat._replace(embedding_dim=1))
 
+    # 如果有多个 unit，就做多次 embedding
     linear_emb_list = [input_from_feature_columns(features, linear_feature_columns, l2_reg, seed,
                                                   prefix=prefix + str(i))[0] for i in range(units)]
     _, dense_input_list = input_from_feature_columns(features, linear_feature_columns, l2_reg, seed, prefix=prefix)
 
     linear_logit_list = []
     for i in range(units):
-
         if len(linear_emb_list[i]) > 0 and len(dense_input_list) > 0:
             sparse_input = concat_func(linear_emb_list[i])
             dense_input = concat_func(dense_input_list)
@@ -178,14 +191,17 @@ def input_from_feature_columns(features, feature_columns, l2_reg, seed, prefix='
         filter(lambda x: isinstance(x, SparseFeat), feature_columns)) if feature_columns else []
     varlen_sparse_feature_columns = list(
         filter(lambda x: isinstance(x, VarLenSparseFeat), feature_columns)) if feature_columns else []
-
+    # 构建每个 field 的 Embedding 矩阵
     embedding_matrix_dict = create_embedding_matrix(feature_columns, l2_reg, seed, prefix=prefix,
                                                     seq_mask_zero=seq_mask_zero)
+    # 得到 sparse feature 的 embedding，把输入的 xx 个1维的 Input 进行 Embedding 成 xx 个 shape 为 4 的向量
     group_sparse_embedding_dict = embedding_lookup(embedding_matrix_dict, features, sparse_feature_columns)
+    # 得到 dense feature
     dense_value_list = get_dense_input(features, feature_columns)
     if not support_dense and len(dense_value_list) > 0:
         raise ValueError("DenseFeat is not supported in dnn_feature_columns")
 
+    # 和普通的sparse_feature_columns的区别在于多了一个Pooling的步骤，即对多个特征做 mean 或者 max
     sequence_embed_dict = varlen_embedding_lookup(embedding_matrix_dict, features, varlen_sparse_feature_columns)
     group_varlen_sparse_embedding_dict = get_varlen_pooling_list(sequence_embed_dict, features,
                                                                  varlen_sparse_feature_columns)

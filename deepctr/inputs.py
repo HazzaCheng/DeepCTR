@@ -25,6 +25,7 @@ def create_embedding_dict(sparse_feature_columns, varlen_sparse_feature_columns,
                           prefix='sparse_', seq_mask_zero=True):
     sparse_embedding = {}
     for feat in sparse_feature_columns:
+        # 每个特征生成一个 Embedding
         emb = Embedding(feat.vocabulary_size, feat.embedding_dim,
                         embeddings_initializer=feat.embeddings_initializer,
                         embeddings_regularizer=l2(l2_reg),
@@ -35,6 +36,7 @@ def create_embedding_dict(sparse_feature_columns, varlen_sparse_feature_columns,
     if varlen_sparse_feature_columns and len(varlen_sparse_feature_columns) > 0:
         for feat in varlen_sparse_feature_columns:
             # if feat.name not in sparse_embedding:
+            # 如果mask_zero设置为True，则索引0，不能在词汇表中使用（input_dim的大小应等于词汇量+ 1）
             emb = Embedding(feat.vocabulary_size, feat.embedding_dim,
                             embeddings_initializer=feat.embeddings_initializer,
                             embeddings_regularizer=l2(
@@ -73,19 +75,20 @@ def create_embedding_matrix(feature_columns, l2_reg, seed, prefix="", seq_mask_z
 
 def embedding_lookup(sparse_embedding_dict, sparse_input_dict, sparse_feature_columns, return_feat_list=(),
                      mask_feat_list=(), to_list=False):
+    # 一些特征可能进行了分组
     group_embedding_dict = defaultdict(list)
     for fc in sparse_feature_columns:
         feature_name = fc.name
         embedding_name = fc.embedding_name
         if (len(return_feat_list) == 0 or feature_name in return_feat_list):
             if fc.use_hash:
-                lookup_idx = Hash(fc.vocabulary_size, mask_zero=(feature_name in mask_feat_list))(
-                    sparse_input_dict[feature_name])
+                lookup_idx = Hash(fc.vocabulary_size, mask_zero=(feature_name in mask_feat_list))(sparse_input_dict[feature_name])
             else:
                 lookup_idx = sparse_input_dict[feature_name]
 
             group_embedding_dict[fc.group_name].append(sparse_embedding_dict[embedding_name](lookup_idx))
     if to_list:
+        # 把 values 都合并成一个 list
         return list(chain.from_iterable(group_embedding_dict.values()))
     return group_embedding_dict
 
