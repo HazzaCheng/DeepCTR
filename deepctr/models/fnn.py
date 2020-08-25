@@ -30,6 +30,7 @@ def FNN(linear_feature_columns, dnn_feature_columns, dnn_hidden_units=(128, 128)
     :param task: str, ``"binary"`` for  binary logloss or  ``"regression"`` for regression loss
     :return: A Keras model instance.
     """
+    # TODO 好像没有用 FM 的参数初始化？
     features = build_input_features(
         linear_feature_columns + dnn_feature_columns)
 
