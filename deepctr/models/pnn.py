@@ -43,8 +43,10 @@ def PNN(dnn_feature_columns, dnn_hidden_units=(128, 128), l2_reg_embedding=1e-5,
 
     sparse_embedding_list, dense_value_list = input_from_feature_columns(features, dnn_feature_columns,
                                                                          l2_reg_embedding, seed)
+    # 计算 inner product
     inner_product = tf.keras.layers.Flatten()(
         InnerProductLayer()(sparse_embedding_list))
+    # 计算 outter product
     outter_product = OutterProductLayer(kernel_type)(sparse_embedding_list)
 
     # ipnn deep input
