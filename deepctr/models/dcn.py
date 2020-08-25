@@ -52,6 +52,7 @@ def DCN(linear_feature_columns, dnn_feature_columns, cross_num=2, dnn_hidden_uni
     if len(dnn_hidden_units) > 0 and cross_num > 0:  # Deep & Cross
         deep_out = DNN(dnn_hidden_units, dnn_activation, l2_reg_dnn, dnn_dropout,
                        dnn_use_bn, seed)(dnn_input)
+        # layer 的层数决定了最高特征交叉的阶数
         cross_out = CrossNet(cross_num, l2_reg=l2_reg_cross)(dnn_input)
         stack_out = tf.keras.layers.Concatenate()([cross_out, deep_out])
         final_logit = tf.keras.layers.Dense(

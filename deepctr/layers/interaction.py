@@ -378,11 +378,16 @@ class CrossNet(Layer):
                 "Unexpected inputs dimensions %d, expect to be 2 dimensions" % (K.ndim(inputs)))
 
         x_0 = tf.expand_dims(inputs, axis=2)
+        # B, U, 1
         x_l = x_0
         for i in range(self.layer_num):
+            # B, 1, 1
             xl_w = tf.tensordot(x_l, self.kernels[i], axes=(1, 0))
+            # B, U, 1
             dot_ = tf.matmul(x_0, xl_w)
+            # B, U, 1
             x_l = dot_ + self.bias[i] + x_l
+        # B, U
         x_l = tf.squeeze(x_l, axis=2)
         return x_l
 
@@ -510,6 +515,7 @@ class InnerProductLayer(Layer):
 
         inner_product = p * q
         if self.reduce_sum:
+            # 将 embedding dim 的维度相加
             inner_product = reduce_sum(
                 inner_product, axis=2, keep_dims=True)
         return inner_product
@@ -730,9 +736,7 @@ class OutterProductLayer(Layer):
 
                             # batch * k * pair * k
 
-                            tf.multiply(
-
-                                p, self.kernel),
+                            tf.multiply(p, self.kernel),
 
                             -1),
 
