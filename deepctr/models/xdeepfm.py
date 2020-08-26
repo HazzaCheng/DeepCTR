@@ -43,6 +43,7 @@ def xDeepFM(linear_feature_columns, dnn_feature_columns, dnn_hidden_units=(256, 
 
     inputs_list = list(features.values())
 
+    # linear 一阶部分
     linear_logit = get_linear_logit(features, linear_feature_columns, seed=seed, prefix='linear',
                                     l2_reg=l2_reg_linear)
 
@@ -52,6 +53,7 @@ def xDeepFM(linear_feature_columns, dnn_feature_columns, dnn_hidden_units=(256, 
     fm_input = concat_func(sparse_embedding_list, axis=1)
 
     dnn_input = combined_dnn_input(sparse_embedding_list, dense_value_list)
+    # dnn 部分
     dnn_output = DNN(dnn_hidden_units, dnn_activation, l2_reg_dnn, dnn_dropout,
                      dnn_use_bn, seed)(dnn_input)
     dnn_logit = tf.keras.layers.Dense(
@@ -59,6 +61,7 @@ def xDeepFM(linear_feature_columns, dnn_feature_columns, dnn_hidden_units=(256, 
 
     final_logit = add_func([linear_logit, dnn_logit])
 
+    # CIN 部分
     if len(cin_layer_size) > 0:
         exFM_out = CIN(cin_layer_size, cin_activation,
                        cin_split_half, l2_reg_cin, seed)(fm_input)

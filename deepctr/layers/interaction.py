@@ -58,8 +58,8 @@ class AFMLayer(Layer):
     def build(self, input_shape):
 
         if not isinstance(input_shape, list) or len(input_shape) < 2:
-            #input_shape = input_shape[0]
-            #if not isinstance(input_shape, list) or len(input_shape) < 2:
+            # input_shape = input_shape[0]
+            # if not isinstance(input_shape, list) or len(input_shape) < 2:
             raise ValueError('A `AttentionalFM` layer should be called '
                              'on a list of at least 2 inputs')
 
@@ -126,7 +126,7 @@ class AFMLayer(Layer):
         attention_output = reduce_sum(
             self.normalized_att_score * bi_interaction, axis=1)
 
-        attention_output = self.dropout(attention_output,training=training)  # training
+        attention_output = self.dropout(attention_output, training=training)  # training
 
         afm_out = self.tensordot([attention_output, self.projection_p])
         return afm_out
@@ -238,8 +238,7 @@ class CIN(Layer):
             self.filters.append(self.add_weight(name='filter' + str(i),
                                                 shape=[1, self.field_nums[-1]
                                                        * self.field_nums[0], size],
-                                                dtype=tf.float32, initializer=glorot_uniform(
-                    seed=self.seed + i),
+                                                dtype=tf.float32, initializer=glorot_uniform(seed=self.seed + i),
                                                 regularizer=l2(self.l2_reg)))
 
             self.bias.append(self.add_weight(name='bias' + str(i), shape=[size], dtype=tf.float32,
@@ -269,25 +268,28 @@ class CIN(Layer):
         hidden_nn_layers = [inputs]
         final_result = []
 
+        # input B, m, D
+        # B, m, 1
         split_tensor0 = tf.split(hidden_nn_layers[0], dim * [1], 2)
         for idx, layer_size in enumerate(self.layer_size):
+            # B, H_{k-1}, 1
             split_tensor = tf.split(hidden_nn_layers[-1], dim * [1], 2)
-
+            # B, m, H_{k-1}
             dot_result_m = tf.matmul(
                 split_tensor0, split_tensor, transpose_b=True)
-
+            # D, B, m * H_{k-1}
             dot_result_o = tf.reshape(
                 dot_result_m, shape=[dim, -1, self.field_nums[0] * self.field_nums[idx]])
-
+            # B, D, m * H_{K-1}
             dot_result = tf.transpose(dot_result_o, perm=[1, 0, 2])
-
+            # B, D, H_k
             curr_out = tf.nn.conv1d(
                 dot_result, filters=self.filters[idx], stride=1, padding='VALID')
 
             curr_out = tf.nn.bias_add(curr_out, self.bias[idx])
 
             curr_out = self.activation_layers[idx](curr_out)
-
+            # B, H_k, D
             curr_out = tf.transpose(curr_out, perm=[0, 2, 1])
 
             if self.split_half:
@@ -304,7 +306,9 @@ class CIN(Layer):
             final_result.append(direct_connect)
             hidden_nn_layers.append(next_hidden)
 
+        # B, H_k, D * layers(or split_half)
         result = tf.concat(final_result, axis=1)
+        # B, H_k
         result = reduce_sum(result, -1, keep_dims=False)
 
         return result
