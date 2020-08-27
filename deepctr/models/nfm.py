@@ -38,6 +38,7 @@ def NFM(linear_feature_columns, dnn_feature_columns, dnn_hidden_units=(128, 128)
 
     inputs_list = list(features.values())
 
+    # FM 的 linear 部分
     linear_logit = get_linear_logit(features, linear_feature_columns, seed=seed, prefix='linear',
                                     l2_reg=l2_reg_linear)
 
@@ -45,6 +46,7 @@ def NFM(linear_feature_columns, dnn_feature_columns, dnn_hidden_units=(128, 128)
                                                                          l2_reg_embedding, seed)
 
     fm_input = concat_func(sparse_embedding_list, axis=1)
+    # Bi-Interaction Layer
     bi_out = BiInteractionPooling()(fm_input)
     if bi_dropout:
         bi_out = tf.keras.layers.Dropout(bi_dropout)(bi_out, training=None)

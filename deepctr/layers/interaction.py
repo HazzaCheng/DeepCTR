@@ -183,6 +183,7 @@ class BiInteractionPooling(Layer):
             concated_embeds_value, axis=1, keep_dims=True))
         sum_of_square = reduce_sum(
             concated_embeds_value * concated_embeds_value, axis=1, keep_dims=True)
+        # 这里要做的是 element-wise product，可以看出没有引入新的变量
         cross_term = 0.5 * (square_of_sum - sum_of_square)
 
         return cross_term
