@@ -81,11 +81,13 @@ class AFMLayer(Layer):
 
         embedding_size = int(input_shape[0][-1])
 
+        # D, F
         self.attention_W = self.add_weight(shape=(embedding_size,
                                                   self.attention_factor), initializer=glorot_normal(seed=self.seed),
                                            regularizer=l2(self.l2_reg_w), name="attention_W")
         self.attention_b = self.add_weight(
             shape=(self.attention_factor,), initializer=Zeros(), name="attention_b")
+        # F, 1
         self.projection_h = self.add_weight(shape=(self.attention_factor, 1),
                                             initializer=glorot_normal(seed=self.seed), name="projection_h")
         self.projection_p = self.add_weight(shape=(
@@ -104,30 +106,35 @@ class AFMLayer(Layer):
         if K.ndim(inputs[0]) != 3:
             raise ValueError(
                 "Unexpected inputs dimensions %d, expect to be 3 dimensions" % (K.ndim(inputs)))
-
+        # T, B, 1, D (T代表特征数), inputs 是一个list
         embeds_vec_list = inputs
         row = []
         col = []
 
+        # 得到所有 pair 组合
         for r, c in itertools.combinations(embeds_vec_list, 2):
             row.append(r)
             col.append(c)
 
+        # B, T*(T-1)/2, D
         p = tf.concat(row, axis=1)
         q = tf.concat(col, axis=1)
         inner_product = p * q
-
+        # B, T*(T-1)/2, D
         bi_interaction = inner_product
+        # B, T*(T-1)/2, F
         attention_temp = tf.nn.relu(tf.nn.bias_add(tf.tensordot(
             bi_interaction, self.attention_W, axes=(-1, 0)), self.attention_b))
         #  Dense(self.attention_factor,'relu',kernel_regularizer=l2(self.l2_reg_w))(bi_interaction)
+        # B, T*(T-1)/2, 1
         self.normalized_att_score = softmax(tf.tensordot(
             attention_temp, self.projection_h, axes=(-1, 0)), dim=1)
+        # B, D
         attention_output = reduce_sum(
             self.normalized_att_score * bi_interaction, axis=1)
 
         attention_output = self.dropout(attention_output, training=training)  # training
-
+        # B, 1
         afm_out = self.tensordot([attention_output, self.projection_p])
         return afm_out
 

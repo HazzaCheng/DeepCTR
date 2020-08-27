@@ -1,3 +1,5 @@
+import sys,os
+sys.path.append(os.path.dirname(__file__) + os.sep + '../')
 import pytest
 import tensorflow as tf
 from packaging import version
