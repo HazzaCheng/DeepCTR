@@ -582,16 +582,20 @@ class InteractingLayer(Layer):
             raise ValueError(
                 "Unexpected inputs dimensions %d, expect to be 3 dimensions" % (len(input_shape)))
         embedding_size = int(input_shape[-1])
+        # D, F*head_num
         self.W_Query = self.add_weight(name='query', shape=[embedding_size, self.att_embedding_size * self.head_num],
                                        dtype=tf.float32,
                                        initializer=tf.keras.initializers.TruncatedNormal(seed=self.seed))
+        # D, F*head_num
         self.W_key = self.add_weight(name='key', shape=[embedding_size, self.att_embedding_size * self.head_num],
                                      dtype=tf.float32,
                                      initializer=tf.keras.initializers.TruncatedNormal(seed=self.seed + 1))
+        # D, F*head_num
         self.W_Value = self.add_weight(name='value', shape=[embedding_size, self.att_embedding_size * self.head_num],
                                        dtype=tf.float32,
                                        initializer=tf.keras.initializers.TruncatedNormal(seed=self.seed + 2))
         if self.use_res:
+            # D, F*head_num
             self.W_Res = self.add_weight(name='res', shape=[embedding_size, self.att_embedding_size * self.head_num],
                                          dtype=tf.float32,
                                          initializer=tf.keras.initializers.TruncatedNormal(seed=self.seed))
@@ -603,27 +607,33 @@ class InteractingLayer(Layer):
         if K.ndim(inputs) != 3:
             raise ValueError(
                 "Unexpected inputs dimensions %d, expect to be 3 dimensions" % (K.ndim(inputs)))
-
-        querys = tf.tensordot(inputs, self.W_Query,
-                              axes=(-1, 0))  # None F D*head_num
+        # inputs: B, T, D (T 代表 fields_size)
+        # querys: B, T, F*head_num
+        querys = tf.tensordot(inputs, self.W_Query, axes=(-1, 0))
+        # keys: B, T, F*head_num
         keys = tf.tensordot(inputs, self.W_key, axes=(-1, 0))
+        # values: B, T, F*head_num
         values = tf.tensordot(inputs, self.W_Value, axes=(-1, 0))
 
-        # head_num None F D
+        # head_num, B, T, F
         querys = tf.stack(tf.split(querys, self.head_num, axis=2))
+        # head_num, B, T, F
         keys = tf.stack(tf.split(keys, self.head_num, axis=2))
+        # head_num, B, T, F
         values = tf.stack(tf.split(values, self.head_num, axis=2))
 
-        inner_product = tf.matmul(
-            querys, keys, transpose_b=True)  # head_num None F F
+        # head_num, B, T, T
+        inner_product = tf.matmul(querys, keys, transpose_b=True)
         self.normalized_att_scores = softmax(inner_product)
-
-        result = tf.matmul(self.normalized_att_scores,
-                           values)  # head_num None F D
+        # head_num, B, T, F
+        result = tf.matmul(self.normalized_att_scores, values)
+        # B, T, F*head_num
         result = tf.concat(tf.split(result, self.head_num, ), axis=-1)
-        result = tf.squeeze(result, axis=0)  # None F D*head_num
+        # B, T, F*head_num
+        result = tf.squeeze(result, axis=0)
 
         if self.use_res:
+            # B, T, F*head_num
             result += tf.tensordot(inputs, self.W_Res, axes=(-1, 0))
         result = tf.nn.relu(result)
 

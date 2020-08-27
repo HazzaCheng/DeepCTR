@@ -56,6 +56,7 @@ def AutoInt(linear_feature_columns, dnn_feature_columns, att_layer_num=3, att_em
 
     att_input = concat_func(sparse_embedding_list, axis=1)
 
+    # 论文里的 Interacting Layer，可能有多层
     for _ in range(att_layer_num):
         att_input = InteractingLayer(
             att_embedding_size, att_head_num, att_res)(att_input)
