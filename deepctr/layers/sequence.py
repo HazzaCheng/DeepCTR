@@ -253,13 +253,16 @@ class AttentionSequencePoolingLayer(Layer):
             key_masks = tf.expand_dims(mask[-1], axis=1)
 
         else:
-
+            # queries B, 1, D
+            # keys B, T, D (T 是 hist 商品的个数)
             queries, keys, keys_length = inputs
             hist_len = keys.get_shape()[1]
             key_masks = tf.sequence_mask(keys_length, hist_len)
 
+        # B, T, 1
         attention_score = self.local_att([queries, keys], training=training)
 
+        # B, 1, T
         outputs = tf.transpose(attention_score, (0, 2, 1))
 
         if self.weight_normalization:
@@ -273,6 +276,7 @@ class AttentionSequencePoolingLayer(Layer):
             outputs = softmax(outputs)
 
         if not self.return_score:
+            # B, 1, D
             outputs = tf.matmul(outputs, keys)
 
         if tf.__version__ < '1.13.0':

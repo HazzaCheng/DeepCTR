@@ -47,6 +47,7 @@ def DIN(dnn_feature_columns, history_feature_list, dnn_use_bn=False,
         filter(lambda x: isinstance(x, SparseFeat), dnn_feature_columns)) if dnn_feature_columns else []
     dense_feature_columns = list(
         filter(lambda x: isinstance(x, DenseFeat), dnn_feature_columns)) if dnn_feature_columns else []
+    # 因为是历史购买信息，所以是变长的
     varlen_sparse_feature_columns = list(
         filter(lambda x: isinstance(x, VarLenSparseFeat), dnn_feature_columns)) if dnn_feature_columns else []
 
@@ -61,17 +62,19 @@ def DIN(dnn_feature_columns, history_feature_list, dnn_use_bn=False,
             sparse_varlen_feature_columns.append(fc)
 
     inputs_list = list(features.values())
-
+    # 得到 embedding table
     embedding_dict = create_embedding_matrix(dnn_feature_columns, l2_reg_embedding, seed, prefix="")
-
+    # 找到当前购买的商品所拥有的历史购买包含的特征的 embedding，例如 item_id, cate_id
     query_emb_list = embedding_lookup(embedding_dict, features, sparse_feature_columns, history_feature_list,
                                       history_feature_list, to_list=True)
+    # 找到历史购买中的特征的 embedding
     keys_emb_list = embedding_lookup(embedding_dict, features, history_feature_columns, history_fc_names,
                                      history_fc_names, to_list=True)
+    # 找到当前购买商品的所有特征的 embedding
     dnn_input_emb_list = embedding_lookup(embedding_dict, features, sparse_feature_columns,
                                           mask_feat_list=history_feature_list, to_list=True)
     dense_value_list = get_dense_input(features, dense_feature_columns)
-
+    # TODO 变长特征是否做 pooling，例子里的 sparse_varlen_feature_columns 是空的
     sequence_embed_dict = varlen_embedding_lookup(embedding_dict, features, sparse_varlen_feature_columns)
     sequence_embed_list = get_varlen_pooling_list(sequence_embed_dict, features, sparse_varlen_feature_columns,
                                                   to_list=True)

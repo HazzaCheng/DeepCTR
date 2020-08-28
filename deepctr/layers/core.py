@@ -70,6 +70,7 @@ class LocalActivationUnit(Layer):
         size = 4 * \
                int(input_shape[0][-1]
                    ) if len(self.hidden_units) == 0 else self.hidden_units[-1]
+        # 输出维度为 1，即 attention score
         self.kernel = self.add_weight(shape=(size, 1),
                                       initializer=glorot_normal(
                                           seed=self.seed),
@@ -94,7 +95,7 @@ class LocalActivationUnit(Layer):
 
         att_input = tf.concat(
             [queries, keys, queries - keys, queries * keys], axis=-1)
-
+        # 论文里计算 attention score 是用 MLP 做的，不是 dot product
         att_out = self.dnn(att_input, training=training)
 
         attention_score = self.dense([att_out, self.kernel, self.bias])

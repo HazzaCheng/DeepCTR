@@ -36,7 +36,8 @@ def create_embedding_dict(sparse_feature_columns, varlen_sparse_feature_columns,
     if varlen_sparse_feature_columns and len(varlen_sparse_feature_columns) > 0:
         for feat in varlen_sparse_feature_columns:
             # if feat.name not in sparse_embedding:
-            # 如果mask_zero设置为True，则索引0，不能在词汇表中使用（input_dim的大小应等于词汇量+ 1）
+            # 如果mask_zero设置为True，则索引0，不能在词汇表中使用（input_dim的大小应等于词汇量 + 1）
+            # TODO 如果 varlen_sparse_feature_columns 里的 feature 和 sparse_feature_columns 的名字同名会覆盖
             emb = Embedding(feat.vocabulary_size, feat.embedding_dim,
                             embeddings_initializer=feat.embeddings_initializer,
                             embeddings_regularizer=l2(

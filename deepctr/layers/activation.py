@@ -48,6 +48,7 @@ class Dice(Layer):
         inputs_normed = self.bn(inputs, training=training)
         # tf.layers.batch_normalization(
         # inputs, axis=self.axis, epsilon=self.epsilon, center=False, scale=False)
+        # 就是对 x_p 先做一个batch norm的归一化，然后再sigmoid
         x_p = tf.sigmoid(inputs_normed)
         return self.alphas * (1.0 - x_p) * inputs + x_p * inputs
 
