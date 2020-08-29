@@ -470,12 +470,20 @@ class Transformer(Layer):
                 "att_embedding_size * head_num must equal the last dimension size of inputs,got %d * %d != %d" % (
                 self.att_embedding_size, self.head_num, embedding_size))
         self.seq_len_max = int(input_shape[0][-2])
+        # F 代表 att_embedding_size, H 代表 head_num
+        # D 代表 embedding_size ,  N 代表 F*H 即 num_units, 这里的 embedding_size 是多头以后的embedding_size, 所以 D == N
+        # T 代表 timestamps 的个数，即 self.seq_len_max
+        # B 代表 batch_size
+
+        # N * N
         self.W_Query = self.add_weight(name='query', shape=[embedding_size, self.att_embedding_size * self.head_num],
                                        dtype=tf.float32,
                                        initializer=tf.keras.initializers.TruncatedNormal(seed=self.seed))
+        # N * N
         self.W_key = self.add_weight(name='key', shape=[embedding_size, self.att_embedding_size * self.head_num],
                                      dtype=tf.float32,
                                      initializer=tf.keras.initializers.TruncatedNormal(seed=self.seed + 1))
+        # N * N
         self.W_Value = self.add_weight(name='value', shape=[embedding_size, self.att_embedding_size * self.head_num],
                                        dtype=tf.float32,
                                        initializer=tf.keras.initializers.TruncatedNormal(seed=self.seed + 2))
@@ -483,8 +491,10 @@ class Transformer(Layer):
         #     self.W_Res = self.add_weight(name='res', shape=[embedding_size, self.att_embedding_size * self.head_num], dtype=tf.float32,
         #                                  initializer=tf.keras.initializers.TruncatedNormal(seed=self.seed))
         if self.use_feed_forward:
+            # N, 4N
             self.fw1 = self.add_weight('fw1', shape=[self.num_units, 4 * self.num_units], dtype=tf.float32,
                                        initializer=tf.keras.initializers.glorot_uniform(seed=self.seed))
+            # 4N, N
             self.fw2 = self.add_weight('fw2', shape=[4 * self.num_units, self.num_units], dtype=tf.float32,
                                        initializer=tf.keras.initializers.glorot_uniform(seed=self.seed))
 
@@ -499,64 +509,64 @@ class Transformer(Layer):
         super(Transformer, self).build(input_shape)
 
     def call(self, inputs, mask=None, training=None, **kwargs):
-
         if self.supports_masking:
             queries, keys = inputs
+            # B, T
             query_masks, key_masks = mask
             query_masks = tf.cast(query_masks, tf.float32)
             key_masks = tf.cast(key_masks, tf.float32)
         else:
             queries, keys, query_masks, key_masks = inputs
-
-            query_masks = tf.sequence_mask(
-                query_masks, self.seq_len_max, dtype=tf.float32)
-            key_masks = tf.sequence_mask(
-                key_masks, self.seq_len_max, dtype=tf.float32)
+            # B, T
+            query_masks = tf.sequence_mask(query_masks, self.seq_len_max, dtype=tf.float32)
+            key_masks = tf.sequence_mask(key_masks, self.seq_len_max, dtype=tf.float32)
             query_masks = tf.squeeze(query_masks, axis=1)
             key_masks = tf.squeeze(key_masks, axis=1)
-
         if self.use_positional_encoding:
             queries = positional_encoding(queries)
             keys = positional_encoding(queries)
-
+        # 计算 attention scores 的步骤
+        # B, T, N   N, F*H -> B, T, F*H
         querys = tf.tensordot(queries, self.W_Query,
                               axes=(-1, 0))  # None T_q D*head_num
         keys = tf.tensordot(keys, self.W_key, axes=(-1, 0))
+        # B, T, F*H   N, F*H -> B, T, F*H
         values = tf.tensordot(keys, self.W_Value, axes=(-1, 0))
 
-        # head_num*None T_q D
+        # B, T, F*H -> B*H, T, F
         querys = tf.concat(tf.split(querys, self.head_num, axis=2), axis=0)
         keys = tf.concat(tf.split(keys, self.head_num, axis=2), axis=0)
         values = tf.concat(tf.split(values, self.head_num, axis=2), axis=0)
 
-        # head_num*None T_q T_k
+        # B*H, T, F    B*H, T, F -> B*H, T, T
         outputs = tf.matmul(querys, keys, transpose_b=True)
 
         outputs = outputs / (keys.get_shape().as_list()[-1] ** 0.5)
-
+        # B*H, T
         key_masks = tf.tile(key_masks, [self.head_num, 1])
 
-        # (h*N, T_q, T_k)
+        # B*H, T, T
         key_masks = tf.tile(tf.expand_dims(key_masks, 1),
                             [1, tf.shape(queries)[1], 1])
-
+        # B*H, T, T
         paddings = tf.ones_like(outputs) * (-2 ** 32 + 1)
 
-        # (h*N, T_q, T_k)
-
+        # B*H, T, T
         outputs = tf.where(tf.equal(key_masks, 1), outputs, paddings, )
         if self.blinding:
+            # 将输入矩阵的对角元素置换为对角元素
             try:
                 outputs = tf.matrix_set_diag(outputs, tf.ones_like(outputs)[
                                                       :, :, 0] * (-2 ** 32 + 1))
             except:
                 outputs = tf.compat.v1.matrix_set_diag(outputs, tf.ones_like(outputs)[
                                                                 :, :, 0] * (-2 ** 32 + 1))
-
+        # 减去最后一维的最大值
         outputs -= reduce_max(outputs, axis=-1, keep_dims=True)
         outputs = softmax(outputs)
-        query_masks = tf.tile(query_masks, [self.head_num, 1])  # (h*N, T_q)
-        # (h*N, T_q, T_k)
+        # B*H, T
+        query_masks = tf.tile(query_masks, [self.head_num, 1])
+        # B*H, T, T
         query_masks = tf.tile(tf.expand_dims(
             query_masks, -1), [1, 1, tf.shape(keys)[1]])
 
@@ -564,11 +574,13 @@ class Transformer(Layer):
 
         outputs = self.dropout(outputs, training=training)
         # Weighted sum
-        # ( h*N, T_q, C/h)
+        # B*H, T, T    B*H, T, F -> B*H, T, F
         result = tf.matmul(outputs, values)
+        # B*H, T, F -> B, T, F*H
         result = tf.concat(tf.split(result, self.head_num, axis=0), axis=2)
 
         if self.use_res:
+            # 加上残差
             # tf.tensordot(queries, self.W_Res, axes=(-1, 0))
             result += queries
         if self.use_layer_norm:
@@ -582,7 +594,7 @@ class Transformer(Layer):
                 result += fw2
             if self.use_layer_norm:
                 result = self.ln(result)
-
+        # B, 1, F*H
         return reduce_mean(result, axis=1, keep_dims=True)
 
     def compute_output_shape(self, input_shape):

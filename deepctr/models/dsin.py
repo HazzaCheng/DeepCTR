@@ -77,6 +77,7 @@ def DSIN(dnn_feature_columns, sess_feature_list, sess_max_count=5, bias_encoding
     inputs_list = list(features.values())
 
     user_behavior_input_dict = {}
+    # 多个 sessions
     for idx in range(sess_max_count):
         sess_input = OrderedDict()
         for i, feat in enumerate(sess_feature_list):
@@ -88,10 +89,8 @@ def DSIN(dnn_feature_columns, sess_feature_list, sess_max_count=5, bias_encoding
 
     embedding_dict = {feat.embedding_name: Embedding(feat.vocabulary_size, feat.embedding_dim,
                                                      embeddings_initializer=feat.embeddings_initializer,
-                                                     embeddings_regularizer=l2(
-                                                         l2_reg_embedding),
-                                                     name='sparse_emb_' +
-                                                          str(i) + '-' + feat.name,
+                                                     embeddings_regularizer=l2(l2_reg_embedding),
+                                                     name='sparse_emb_' + str(i) + '-' + feat.name,
                                                      mask_zero=(feat.name in sess_feature_list)) for i, feat in
                       enumerate(sparse_feature_columns)}
 
@@ -105,24 +104,28 @@ def DSIN(dnn_feature_columns, sess_feature_list, sess_max_count=5, bias_encoding
 
     dnn_input_emb = Flatten()(concat_func(dnn_input_emb_list))
 
+    # session division layer
     tr_input = sess_interest_division(embedding_dict, user_behavior_input_dict, sparse_feature_columns,
                                       sess_feature_list, sess_max_count, bias_encoding=bias_encoding)
-
+    # self-attention
     Self_Attention = Transformer(att_embedding_size, att_head_num, dropout_rate=0, use_layer_norm=False,
                                  use_positional_encoding=(not bias_encoding), seed=seed, supports_masking=True,
                                  blinding=True)
-    sess_fea = sess_interest_extractor(
-        tr_input, sess_max_count, Self_Attention)
-
+    # session extractor layer
+    #  B, S, F*H
+    sess_fea = sess_interest_extractor(tr_input, sess_max_count, Self_Attention)
+    # session interest interacting layer
     interest_attention_layer = AttentionSequencePoolingLayer(att_hidden_units=(64, 16), weight_normalization=True,
                                                              supports_masking=False)(
         [query_emb, sess_fea, user_sess_length])
 
     lstm_outputs = BiLSTM(hist_emb_size,
                           layers=2, res_layers=0, dropout_rate=0.2, )(sess_fea)
+    # session interest activating layer
     lstm_attention_layer = AttentionSequencePoolingLayer(att_hidden_units=(64, 16), weight_normalization=True)(
         [query_emb, lstm_outputs, user_sess_length])
 
+    # concat 起来一起输入
     dnn_input_emb = Concatenate()(
         [dnn_input_emb, Flatten()(interest_attention_layer), Flatten()(lstm_attention_layer)])
 
@@ -158,6 +161,7 @@ def sess_interest_division(sparse_embedding_dict, user_behavior_input_dict, spar
         keys_emb = concat_func(keys_emb_list, mask=True)
         tr_input.append(keys_emb)
     if bias_encoding:
+        # bias encoding
         tr_input = BiasEncoding(sess_max_count)(tr_input)
     return tr_input
 
@@ -167,5 +171,7 @@ def sess_interest_extractor(tr_input, sess_max_count, TR):
     for i in range(sess_max_count):
         tr_out.append(TR(
             [tr_input[i], tr_input[i]]))
+    # S 代表 session 的个数
+    # B, 1, F*H -> B, S, F*H
     sess_fea = concat_func(tr_out, axis=1)
     return sess_fea
