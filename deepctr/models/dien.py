@@ -103,9 +103,12 @@ def interest_evolution(concat_behavior, deep_input_item, user_behavior_length, g
         raise ValueError("gru_type error ")
     aux_loss_1 = None
     embedding_size = None
+    # 实际上是 interest extractor 层，里面包含了 GRU, AGRU 和 AUGRU 的实现
+    # interest extractor 层用的就是简单的 GRU
     rnn_outputs = DynamicGRU(embedding_size, return_sequence=True,
                              name="gru1")([concat_behavior, user_behavior_length])
 
+    # L_{aux}
     if gru_type == "AUGRU" and use_neg:
         aux_loss_1 = auxiliary_loss(rnn_outputs[:, :-1, :], concat_behavior[:, 1:, :],
 
@@ -126,12 +129,13 @@ def interest_evolution(concat_behavior, deep_input_item, user_behavior_length, g
             deep_input_item, rnn_outputs2, user_behavior_length])
 
     else:  # AIGRU AGRU AUGRU
-
+        # 首先计算出 attention scores
         scores = AttentionSequencePoolingLayer(att_hidden_units=att_hidden_size, att_activation=att_activation,
                                                weight_normalization=att_weight_normalization, return_score=True)([
             deep_input_item, rnn_outputs, user_behavior_length])
 
         if gru_type == "AIGRU":
+            # 将 h_t 乘上 a_t 后还是按照 GRU 的逻辑去处理
             hist = multiply([rnn_outputs, Permute([2, 1])(scores)])
             final_state2 = DynamicGRU(embedding_size, gru_type="GRU", return_sequence=False, name='gru2')(
                 [hist, user_behavior_length])
@@ -185,6 +189,7 @@ def DIEN(dnn_feature_columns, history_feature_list,
     neg_history_feature_columns = []
     sparse_varlen_feature_columns = []
     history_fc_names = list(map(lambda x: "hist_" + x, history_feature_list))
+    # 负采样的 hist behaviors
     neg_history_fc_names = list(map(lambda x: "neg_" + x, history_fc_names))
     for fc in varlen_sparse_feature_columns:
         feature_name = fc.name
@@ -227,6 +232,7 @@ def DIEN(dnn_feature_columns, history_feature_list,
 
     else:
         neg_concat_behavior = None
+    # 包含 interest extractor 层和 interest evolving 层
     hist, aux_loss_1 = interest_evolution(keys_emb, query_emb, user_behavior_length, gru_type=gru_type,
                                           use_neg=use_negsampling, neg_concat_behavior=neg_concat_behavior,
                                           att_hidden_size=att_hidden_units,
@@ -255,6 +261,7 @@ def DIEN(dnn_feature_columns, history_feature_list,
     model = tf.keras.models.Model(inputs=model_input_list, outputs=output)
 
     if use_negsampling:
+        # L_{target} + α * L_{aux}
         model.add_loss(alpha * aux_loss_1)
     try:
         tf.keras.backend.get_session().run(tf.global_variables_initializer())
