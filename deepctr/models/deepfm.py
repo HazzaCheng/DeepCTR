@@ -60,9 +60,8 @@ def DeepFM(linear_feature_columns, dnn_feature_columns, fm_group=[DEFAULT_GROUP_
         group_embedding_dict.values())), dense_value_list)
     dnn_output = DNN(dnn_hidden_units, dnn_activation, l2_reg_dnn, dnn_dropout,
                      dnn_use_bn, seed)(dnn_input)
-    dnn_logit = tf.keras.layers.Dense(
-        1, use_bias=False, activation=None)(dnn_output)
     # linear_logit、fm_logit 和 dnn_logit 加起来输入最后的 sigmoid 函数，然后用输入和输出构建 Keras 的 Model
+    dnn_logit = tf.keras.layers.Dense(1, use_bias=False, kernel_initializer=tf.keras.initializers.glorot_normal(seed=seed))(dnn_output)
     final_logit = add_func([linear_logit, fm_logit, dnn_logit])
 
     output = PredictionLayer(task)(final_logit)

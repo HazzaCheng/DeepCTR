@@ -25,9 +25,9 @@ if __name__ == "__main__":
     feature_names = get_feature_names(linear_feature_columns + dnn_feature_columns)
 
     # 3.generate input data for model
-    train, test = train_test_split(data, test_size=0.2)
-    train_model_input = {name: train[name].values for name in feature_names}
-    test_model_input = {name: test[name].values for name in feature_names}
+    train, test = train_test_split(data, test_size=0.2, random_state=2020)
+    train_model_input = {name:train[name].values for name in feature_names}
+    test_model_input = {name:test[name].values for name in feature_names}
 
     # 4.Define Model,train,predict and evaluate
     model = DeepFM(linear_feature_columns, dnn_feature_columns, task='regression')
