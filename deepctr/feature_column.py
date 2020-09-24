@@ -149,7 +149,7 @@ def get_linear_logit(features, feature_columns, units=1, use_bias=False, seed=10
     不过这里使用了Embedding实现了类似的效果，用Embedding Matrix实现了同样的效果，
     """
     linear_feature_columns = copy(feature_columns)
-    # 将 embedding_dim 设置为 1
+    # 将 embedding_dim 设置为 1 来代替 <w, x>
     for i in range(len(linear_feature_columns)):
         if isinstance(linear_feature_columns[i], SparseFeat):
             linear_feature_columns[i] = linear_feature_columns[i]._replace(embedding_dim=1,

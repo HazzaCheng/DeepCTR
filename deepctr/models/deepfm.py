@@ -44,7 +44,7 @@ def DeepFM(linear_feature_columns, dnn_feature_columns, fm_group=[DEFAULT_GROUP_
 
     inputs_list = list(features.values())
 
-    # 得到 fm 里 linear 部分，线性部分我们虽然也使用了Embedding来替代 <w, x>，
+    # 得到 fm 里 linear 部分，线性部分我们虽然也使用了 Embedding 来替代 <w, x>，
     # 但是这个Embedding并不是真正意义的Embedding，只是为了复用代码避免再次one-hot自己展开而已，所有不能共享。
     linear_logit = get_linear_logit(features, linear_feature_columns, seed=seed, prefix='linear',
                                     l2_reg=l2_reg_linear)
